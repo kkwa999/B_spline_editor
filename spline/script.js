@@ -1,5 +1,5 @@
 // global variables
-let scene, renderer, orbit, axesHelper, gridHelper;
+let scene, renderer, orbit, axesHelper, gridHelper, gui, guiControls;
 let point, point_geometry;
 let ch_vertices, ch_lines, ch_curves;
 
@@ -61,12 +61,36 @@ gridHelper.visible = false;
 scene.add( gridHelper );
 
 // GUI
-guiSetup(); 
+guiSetup();
 
 // Handling resize event
 
 window.addEventListener('resize', resize, true);
 
+function reset() {
+    vertices_temp = [];
+    points_temp = [];
+    lines_temp = [];
+    curves_temp = [];
+
+    vertices = [];
+    points = [];
+    lines = [];
+    curve = null;
+    pointcolors = [0x952323];
+
+    v_index = 0;
+    l_index = 0;
+
+    while(scene.children.length > 0){ 
+        scene.remove(scene.children[0]); 
+    }
+    scene.add(axesHelper);
+    scene.add(gridHelper);
+
+    guiControls.num_splines = lines_temp.length;
+    gui.updateDisplay()
+}
 
 function animate(time){
     //axesHelper.visible = guiControls.axes;
@@ -81,10 +105,14 @@ function resize(){
 }
 
 function guiSetup() {
-    const guiControls = new function() {
+    guiControls = new function() {
         this.drawPoint = function() {
             addcurve();
         }
+        this.resetPoint = function() {
+            reset();
+        }
+        this.num_splines = 0;
         this.axes = false;
         this.grid = false;
         this.line = true; 
@@ -96,11 +124,18 @@ function guiSetup() {
         }
     }
     
-    const gui = new dat.GUI();
+    gui = new dat.GUI();
 
     const folderDraw = gui.addFolder('Draw');
     const drawPointControl = folderDraw.add(guiControls, 'drawPoint').name('draw point');
+    const drawResetControl = folderDraw.add(guiControls, 'resetPoint').name('reset points');
     folderDraw.open();
+
+    const folderInfo = gui.addFolder('Info');
+    const NumSplines = folderInfo.add(guiControls, 'num_splines').name('num of splines');
+
+    NumSplines.domElement.querySelector('input').disabled = true;
+    folderInfo.open();
     
     const folderVis = gui.addFolder('Visibility');
     const axesVisibleControl = folderVis.add(guiControls, 'axes').onChange(function() {
@@ -128,6 +163,8 @@ function guiSetup() {
         camera.zoom = guiControls.zoom_factor*20;
         camera.updateProjectionMatrix();
     });
+    ZoomControl.domElement.style.pointerEvents = "auto";
+    ZoomControl.domElement.querySelector('input').disabled = true;
     const resetViewControl = folderArrow.add(guiControls, 'resetView').name('reset view');
     folderArrow.open(); 
 }
@@ -205,15 +242,14 @@ function doubleclick(e) {
 
         if (line_visble == false) {
             line.visible = false;
-            // for (var i=0; i < lines.length; i++) {
-            //     lines[i].visible = false;
-            // }
         }
         
         scene.remove(curve);
         curve = drawcurve(vertices);
         scene.add(curve);
     }
+    guiControls.num_splines = lines_temp.length+1;
+    gui.updateDisplay()
 }
 
 function drawpoint(){
