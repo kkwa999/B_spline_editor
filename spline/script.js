@@ -1,11 +1,3 @@
-// // Helpers: axesHelper, arrowHelper, gridHelper 에 대한 소개
-// // dat.GUI 를 이용한 user interface
-// import {BSpline} from './BSpline.js';
-// // import {DragControls} from './spline/asset/DragControls.js';
-// // import * as THREE from 'three';
-// // import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
-// // import Stats from 'three/addons/libs/stats.module.js';
-
 // global variables
 let scene, renderer, orbit, point, point_geometry;
 let axesHelper, gridHelper;
@@ -43,11 +35,6 @@ camera.updateProjectionMatrix();
 renderer = new THREE.WebGLRenderer();
 renderer.setSize( window.innerWidth, window.innerHeight );
 document.body.appendChild( renderer.domElement );
-
-// // orbit control
-// orbit = new OrbitControls( camera, renderer.domElement );
-// orbit.target.set(0, 0, 0);
-// orbit.update();
 
 // axes Helper
 axesHelper = new THREE.AxesHelper(30);
@@ -117,9 +104,6 @@ function guiSetup() {
         camera.zoom = guiControls.zoom_factor*20;
         camera.updateProjectionMatrix();
     }); 
-    // const arrowColorControl = folderArrow.addColor(guiControls, 'arrowColor').onChange(function() {
-    //     arrowHelper.setColor(guiControls.arrowColor);
-    // });
     folderArrow.open(); 
     
     gui.add(guiControls, 'resetView').name('reset view');
