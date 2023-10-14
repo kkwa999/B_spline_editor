@@ -1,6 +1,6 @@
 // global variables
-let scene, renderer, orbit, point, point_geometry;
-let axesHelper, gridHelper;
+let scene, renderer, orbit, axesHelper, gridHelper;
+let point, point_geometry;
 let ch_vertices, ch_lines, ch_curves;
 
 let newVertices;
@@ -66,6 +66,7 @@ guiSetup();
 // Handling resize event
 
 window.addEventListener('resize', resize, true);
+
 
 function animate(time){
     //axesHelper.visible = guiControls.axes;
