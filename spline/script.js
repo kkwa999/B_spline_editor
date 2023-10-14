@@ -1,5 +1,6 @@
 // global variables
 let scene, renderer, orbit, axesHelper, gridHelper, gui, guiControls;
+let dragControls;
 let point, point_geometry;
 let ch_vertices, ch_lines, ch_curves;
 
@@ -12,14 +13,16 @@ var lines = [];
 var curve;
 var pointcolors = [0x952323];
 
-var vertices_temp = [];
-var points_temp = [];
-var lines_temp = [];
-var curves_temp = [];
+var vertices_group = [];
+var points_group = [];
+var lines_group = [];
+var curves_group = [];
 
 const width = window.innerWidth;
 const height = window.innerHeight;
 
+var reset_flag = false;
+var drag_flag = true;
 var v_index = 0;
 var l_index = 0;
 
@@ -40,7 +43,7 @@ scene.background = new THREE.Color("black");
 const camera = new THREE.OrthographicCamera(-width/2, width/2, height/2, -height/2, 0.1, 100);
 camera.position.set(0, 0, 4);
 camera.lookAt(0, 0, 0);
-camera.zoom = 20;
+camera.zoom = 50;
 camera.updateProjectionMatrix();
 
 // renderer
@@ -49,12 +52,12 @@ renderer.setSize( window.innerWidth, window.innerHeight );
 document.body.appendChild( renderer.domElement );
 
 // axes Helper
-axesHelper = new THREE.AxesHelper(30);
+axesHelper = new THREE.AxesHelper(12);
 axesHelper.visible = false;
 scene.add(axesHelper);
 
 // grid helper
-gridHelper = new THREE.GridHelper(50, 30);
+gridHelper = new THREE.GridHelper(20, 15);
 gridHelper.rotation.x = Math.PI / 2;
 gridHelper.position.set(0, 0, -0.001);
 gridHelper.visible = false;
@@ -68,28 +71,37 @@ guiSetup();
 window.addEventListener('resize', resize, true);
 
 function reset() {
-    vertices_temp = [];
-    points_temp = [];
-    lines_temp = [];
-    curves_temp = [];
+    if (reset_flag == true) {
+        vertices_group = [];
+        points_group = [];
+        lines_group = [];
+        curves_group = [];
 
-    vertices = [];
-    points = [];
-    lines = [];
-    curve = null;
-    pointcolors = [0x952323];
+        vertices = [];
+        points = [];
+        lines = [];
+        curve = null;
+        pointcolors = [0x952323];
 
-    v_index = 0;
-    l_index = 0;
+        v_index = 0;
+        l_index = 0;
 
-    while(scene.children.length > 0){ 
-        scene.remove(scene.children[0]); 
+        dragControls.dispose();
+        dragControls = null;
+
+        while(scene.children.length > 0){ 
+            scene.remove(scene.children[0]); 
+        }
+        
+        scene.add(axesHelper);
+        scene.add(gridHelper);
+
+        guiControls.num_splines = lines_group.length;
+        gui.updateDisplay()
+
+        reset_flag = false;
+        drag_flag = true;
     }
-    scene.add(axesHelper);
-    scene.add(gridHelper);
-
-    guiControls.num_splines = lines_temp.length;
-    gui.updateDisplay()
 }
 
 function animate(time){
@@ -104,6 +116,11 @@ function resize(){
     renderer.setSize( window.innerWidth, window.innerHeight );
 }
 
+function updateCamera(zoom_factor) {
+    camera.zoom = zoom_factor;
+    camera.updateProjectionMatrix();
+}
+
 function guiSetup() {
     guiControls = new function() {
         this.drawPoint = function() {
@@ -116,18 +133,17 @@ function guiSetup() {
         this.axes = false;
         this.grid = false;
         this.line = true; 
-        this.zoom_factor = 1; 
+        this.zoom_factor = 50; 
         this.resetView = function() {
-            camera.zoom = 20;
-            ZoomControl.setValue(1.0);
-            camera.updateProjectionMatrix();
+            ZoomControl.setValue(50);
+            updateCamera(50)
         }
     }
     
     gui = new dat.GUI();
 
     const folderDraw = gui.addFolder('Draw');
-    const drawPointControl = folderDraw.add(guiControls, 'drawPoint').name('draw point');
+    const drawPointControl = folderDraw.add(guiControls, 'drawPoint').name('draw new point');
     const drawResetControl = folderDraw.add(guiControls, 'resetPoint').name('reset points');
     folderDraw.open();
 
@@ -149,19 +165,19 @@ function guiSetup() {
         for (var i=0; i < lines.length; i++) {
             lines[i].visible = guiControls.line;
         }
-        for (var i=0; i < lines_temp.length; i++) {
-            for (var j=0; j < lines_temp[i].length; j++) {
-                lines_temp[i][j].visible = guiControls.line;
+        for (var i=0; i < lines_group.length; i++) {
+            for (var j=0; j < lines_group[i].length; j++) {
+                lines_group[i][j].visible = guiControls.line;
             }
         }
     });
     folderVis.open(); 
     
     const folderArrow = gui.addFolder('View');
-    const ZoomControl = folderArrow.add(guiControls, 'zoom_factor', 0.1, 2.0);
-    ZoomControl.step(0.001).name('zoom').onChange(function() {
-        camera.zoom = guiControls.zoom_factor*20;
-        camera.updateProjectionMatrix();
+    const ZoomControl = folderArrow.add(guiControls, 'zoom_factor', 0, 100);
+    ZoomControl.step(1).name('zoom').onChange(function() {
+        if (guiControls.zoom_factor > 0.1)
+            updateCamera(guiControls.zoom_factor);
     });
     ZoomControl.domElement.style.pointerEvents = "auto";
     ZoomControl.domElement.querySelector('input').disabled = true;
@@ -174,6 +190,22 @@ window.addEventListener( 'mousemove', mousemoveon);
 
 window.addEventListener('dblclick', doubleclick);
 
+window.addEventListener( 'mousewheel', function(e) {
+    if (e.deltaY < 0) {
+        if (guiControls.zoom_factor < 100) {
+            guiControls.zoom_factor += 5;
+            updateCamera(guiControls.zoom_factor);
+        }
+    }else {
+        if (guiControls.zoom_factor > 1) {
+            guiControls.zoom_factor -= 5;
+            updateCamera(guiControls.zoom_factor);
+        }
+    }
+    guiControls.zoom_factor = Math.round(guiControls.zoom_factor);
+    gui.updateDisplay()
+});
+
 // prevent right click menu
 window.addEventListener('contextmenu', function(e) {
     e.preventDefault();
@@ -181,18 +213,19 @@ window.addEventListener('contextmenu', function(e) {
 });
 
 function addcurve() {
-    vertices_temp.push(vertices);
-    points_temp.push(points);
-    lines_temp.push(lines);
-    curves_temp.push(curve);
+    vertices_group.push(vertices);
+    points_group.push(points);
+    lines_group.push(lines);
+    curves_group.push(curve);
 
     vertices = [];
-    points = [];
+    // points = [];
     lines = [];
     curve = null;
 
     pointcolors.push(pointcolors[pointcolors.length-1] * Math.random());
 
+    draw_index = 0;
     v_index = 0;
     l_index += 1;
 }
@@ -203,9 +236,9 @@ function changeattrib(lineindex) {
         ch_lines = lines;
         ch_curves = curve;
     }else {
-        ch_vertices = vertices_temp[lineindex];
-        ch_lines = lines_temp[lineindex];
-        ch_curves = curves_temp[lineindex];
+        ch_vertices = vertices_group[lineindex];
+        ch_lines = lines_group[lineindex];
+        ch_curves = curves_group[lineindex];
     }
 }
 
@@ -215,9 +248,9 @@ function replaceattrib(lineindex, newVertices, newLines, newCurves) {
         lines = newLines;
         curve = newCurves;
     }else {
-        vertices_temp[lineindex] = newVertices;
-        lines_temp[lineindex] = newLines;
-        curves_temp[lineindex] = newCurves;
+        vertices_group[lineindex] = newVertices;
+        lines_group[lineindex] = newLines;
+        curves_group[lineindex] = newCurves;
     }
 }
 
@@ -248,8 +281,9 @@ function doubleclick(e) {
         curve = drawcurve(vertices);
         scene.add(curve);
     }
-    guiControls.num_splines = lines_temp.length+1;
+    guiControls.num_splines = lines_group.length+1;
     gui.updateDisplay()
+    reset_flag = true;
 }
 
 function drawpoint(){
@@ -267,10 +301,11 @@ function drawpoint(){
 
     v_index += 1;
 
-    if (points.length > 0) {
-        var controls = new THREE.DragControls( points, camera, renderer.domElement );
-        controls.addEventListener( 'dragstart', dragStartCallback );
-        controls.addEventListener( 'dragend', dragendCallback );
+    if (drag_flag == true) {
+        dragControls = new THREE.DragControls( points, camera, renderer.domElement );
+        dragControls.addEventListener( 'dragstart', dragStartCallback );
+        dragControls.addEventListener( 'dragend', dragendCallback );
+        drag_flag = false;
     }
 }
 
