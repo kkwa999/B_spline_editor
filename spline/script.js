@@ -1,3 +1,30 @@
+// 2D draw view
+paper.install(window);
+// window.onload = function () {
+// Get a reference to the canvas object
+var canvas = document.getElementById('myCanvas');
+// Create an empty project and a view for the canvas:
+paper.setup(canvas);
+
+var path = new paper.Path();
+// Give the stroke a color
+path.strokeColor = 'black';
+var start = new paper.Point(100, 100);
+// Move to start and draw a line from there
+var myPath = new Path();
+myPath.strokeColor = 'black';
+myPath.add(new Point(40, 90));
+myPath.add(new Point(90, 40));
+myPath.add(new Point(140, 90));
+
+var myPath2 = new Path();
+myPath2.strokeColor = 'black';
+myPath2.add(new Point(20, 40));
+myPath2.add(new Point(35, 25));
+myPath2.add(new Point(140, 90));
+
+var intersections = myPath.getIntersections(myPath2);
+
 // global variables
 let scene, renderer, orbit, axesHelper, gridHelper, gui, guiControls;
 let dragControls;
