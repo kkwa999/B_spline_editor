@@ -1,64 +1,48 @@
 // 2D draw view
 paper.install(window);
-// window.onload = function () {
 // Get a reference to the canvas object
 var canvas = document.getElementById('myCanvas');
 // Create an empty project and a view for the canvas:
 paper.setup(canvas);
 
-var path = new paper.Path();
-// Give the stroke a color
-path.strokeColor = 'black';
-var start = new paper.Point(100, 100);
-// Move to start and draw a line from there
-var myPath = new Path();
-myPath.strokeColor = 'black';
-myPath.add(new Point(40, 90));
-myPath.add(new Point(90, 40));
-myPath.add(new Point(140, 90));
-
-var myPath2 = new Path();
-myPath2.strokeColor = 'black';
-myPath2.add(new Point(20, 40));
-myPath2.add(new Point(35, 25));
-myPath2.add(new Point(140, 90));
-
-var intersections = myPath.getIntersections(myPath2);
-
 // global variables
 let scene, renderer, orbit, axesHelper, gridHelper, gui, guiControls;
-let dragControls;
-let point, point_geometry;
+let drawPointControl, IntersectionControl, dragControls;
+let point;
 let ch_vertices, ch_lines, ch_curves;
+let lineindex, startColor;
 
 let newVertices;
 let line_visble = true;
 
-var vertices = [];
-var points = [];
-var lines = [];
-var curve;
-var pointcolors = [0x952323];
+let vertices = [];
+let points = [];
+let lines = [];
+let curve;
+let pointcolors = [0x952323];
 
-var vertices_group = [];
-var points_group = [];
-var lines_group = [];
-var curves_group = [];
+let vertices_group = [];
+let points_group = [];
+let lines_group = [];
+let curves_group = [];
+
+let intersect_points = [];
 
 const width = window.innerWidth;
 const height = window.innerHeight;
 
-var reset_flag = false;
-var drag_flag = true;
-var v_index = 0;
-var l_index = 0;
+let reset_flag = false;
+let drag_flag = true;
+let intersection_flag = false;
+let v_index = 0;
+let l_index = 0;
 
-var mouse = new THREE.Vector2();
-var plane = new THREE.Plane();
-var planeNormal = new THREE.Vector3();
-var raycaster = new THREE.Raycaster();
+let mouse = new THREE.Vector2();
+let plane = new THREE.Plane();
+let planeNormal = new THREE.Vector3();
+let raycaster = new THREE.Raycaster();
 raycaster.params.Points.threshold = 0.25;
-var planePoint = new THREE.Vector3();
+let planePoint = new THREE.Vector3();
 
 let move_flag = false;
 
@@ -110,6 +94,8 @@ function reset() {
         curve = null;
         pointcolors = [0x952323];
 
+        intersect_points = [];
+
         v_index = 0;
         l_index = 0;
 
@@ -123,19 +109,34 @@ function reset() {
         scene.add(axesHelper);
         scene.add(gridHelper);
 
+        drawPointControl.__li.style.borderLeftColor = decimalToRgb(pointcolors[pointcolors.length-1]);
+
         guiControls.num_splines = lines_group.length;
         gui.updateDisplay()
 
+        IntersectionControl.__li.style.pointerEvents = "none";
+
         reset_flag = false;
         drag_flag = true;
+        intersection_flag = false;
     }
 }
 
-function animate(time){
+function animate(){
     //axesHelper.visible = guiControls.axes;
     requestAnimationFrame( animate );
     renderer.render( scene, camera );
 }
+
+function decimalToRgb(decimal) {
+    // 10진수(decimal) 색상 코드를 RGB 색상 코드로 변환
+    var r = (decimal >> 16) & 255;
+    var g = (decimal >> 8) & 255;
+    var b = decimal & 255;
+  
+    // RGB 색상 코드로 변환하여 반환
+    return 'rgb(' + r + ', ' + g + ', ' + b + ')';
+  }
 
 function resize(){
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -152,11 +153,16 @@ function guiSetup() {
     guiControls = new function() {
         this.drawPoint = function() {
             addcurve();
+
         }
         this.resetPoint = function() {
             reset();
         }
         this.num_splines = 0;
+        this.intersection = function() {
+            drawIntersectionPoints(findIntersection(curves_group[0], curve));
+            intersection_flag = true;
+        }
         this.axes = false;
         this.grid = false;
         this.line = true; 
@@ -170,24 +176,27 @@ function guiSetup() {
     gui = new dat.GUI();
 
     const folderDraw = gui.addFolder('Draw');
-    const drawPointControl = folderDraw.add(guiControls, 'drawPoint').name('draw new point');
-    const drawResetControl = folderDraw.add(guiControls, 'resetPoint').name('reset points');
+    drawPointControl = folderDraw.add(guiControls, 'drawPoint').name('Draw new control point');
+    drawPointControl.__li.style.borderLeftColor = decimalToRgb(pointcolors[pointcolors.length-1]);
+    folderDraw.add(guiControls, 'resetPoint').name('Reset curves');
     folderDraw.open();
 
-    const folderInfo = gui.addFolder('Info');
-    const NumSplines = folderInfo.add(guiControls, 'num_splines').name('num of splines');
-
+    const folderIntersection = gui.addFolder('Intersection between curves');
+    const NumSplines = folderIntersection.add(guiControls, 'num_splines').name('Num of splines');
     NumSplines.domElement.querySelector('input').disabled = true;
-    folderInfo.open();
+    IntersectionControl = folderIntersection.add(guiControls, 'intersection').name('Find intersection points');
+    IntersectionControl.__li.style.pointerEvents = "none";
+    folderIntersection.open();
     
     const folderVis = gui.addFolder('Visibility');
-    const axesVisibleControl = folderVis.add(guiControls, 'axes').onChange(function() {
+    folderVis.add(guiControls, 'axes').onChange(function() {
         axesHelper.visible = guiControls.axes;
-    });
+    }).name('Axes');
     const gridVisibleControl = folderVis.add(guiControls, 'grid').onChange(function() {
         gridHelper.visible = guiControls.grid;
-    });
-    const arrowVisibleControl = folderVis.add(guiControls, 'line').onChange(function() {
+    }).name('Grid');
+    gridVisibleControl.__li.style.outlineColor = "blue"
+    folderVis.add(guiControls, 'line').onChange(function() {
         line_visble = guiControls.line;
         for (var i=0; i < lines.length; i++) {
             lines[i].visible = guiControls.line;
@@ -197,21 +206,20 @@ function guiSetup() {
                 lines_group[i][j].visible = guiControls.line;
             }
         }
-    });
+    }).name('Line');
     folderVis.open(); 
     
-    const folderArrow = gui.addFolder('View');
-    const ZoomControl = folderArrow.add(guiControls, 'zoom_factor', 0, 100);
-    ZoomControl.step(1).name('zoom').onChange(function() {
+    const folderView = gui.addFolder('View');
+    const ZoomControl = folderView.add(guiControls, 'zoom_factor', 0, 100);
+    ZoomControl.step(1).name('Zoom').onChange(function() {
         if (guiControls.zoom_factor > 0.1)
             updateCamera(guiControls.zoom_factor);
     });
     ZoomControl.domElement.style.pointerEvents = "auto";
     ZoomControl.domElement.querySelector('input').disabled = true;
-    const resetViewControl = folderArrow.add(guiControls, 'resetView').name('reset view');
-    folderArrow.open(); 
+    folderView.add(guiControls, 'resetView').name('Reset view');
+    folderView.open(); 
 }
-
 
 window.addEventListener( 'mousemove', mousemoveon);
 
@@ -240,21 +248,35 @@ window.addEventListener('contextmenu', function(e) {
 });
 
 function addcurve() {
-    vertices_group.push(vertices);
-    points_group.push(points);
-    lines_group.push(lines);
-    curves_group.push(curve);
+    if (lines.length > 0) {
+        vertices_group.push(vertices);
+        points_group.push(points);
+        lines_group.push(lines);
+        curves_group.push(curve);
 
-    vertices = [];
-    // points = [];
-    lines = [];
-    curve = null;
+        vertices = [];
+        lines = [];
+        curve = null;
 
-    pointcolors.push(pointcolors[pointcolors.length-1] * Math.random());
+        pointcolors.push(pointcolors[pointcolors.length-1] * Math.random());
+        drawPointControl.__li.style.borderLeftColor = decimalToRgb(pointcolors[pointcolors.length-1]);
+        if (lines_group.length == 2) {
+            IntersectionControl.__li.style.pointerEvents = "none";
+            intersection_flag = false;
+        }
 
-    draw_index = 0;
-    v_index = 0;
-    l_index += 1;
+        if (intersect_points.length > 0) {
+            for (var i=0; i < intersect_points.length; i++) {
+                scene.remove(intersect_points[i]);
+            }
+        }
+
+        v_index = 0;
+        l_index += 1;
+    }
+    else {
+        alert("Please draw at least one curve");
+    }
 }
 
 function changeattrib(lineindex) {
@@ -291,7 +313,14 @@ function mousemoveon(e) {
 }
 
 function doubleclick(e) {
-    drawpoint();
+    vertices.push(new THREE.Vector3(planePoint.x,planePoint.y, planePoint.z));
+    var point_color = pointcolors[pointcolors.length-1];
+    var point_geometry = drawpoint(vertices[vertices.length-1], point_color);
+    scene.add(point_geometry);
+    points.push(point_geometry);
+    v_index += 1;
+    dragCallback(points);
+
     if (vertices.length > 1) {
         var lines_draw = [];
         lines_draw.push(vertices[vertices.length-2]);
@@ -310,30 +339,23 @@ function doubleclick(e) {
     }
     guiControls.num_splines = lines_group.length+1;
     gui.updateDisplay()
+    if (guiControls.num_splines == 2) {
+        IntersectionControl.__li.style.pointerEvents = "auto";
+    }
     reset_flag = true;
 }
 
-function drawpoint(){
-    vertices.push(new THREE.Vector3(planePoint.x,planePoint.y, planePoint.z));
+function drawpoint(point, point_color, point_size=20){
+    if (point.z == undefined) {
+        point.z = 0;
+    }
     var geometry = new THREE.BufferGeometry();
     geometry.setAttribute( 'index', new THREE.Uint16BufferAttribute(new THREE.Vector2(v_index), 1));
-    geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( new THREE.Vector3(planePoint.x,planePoint.y, planePoint.z), 3 ) );
+    geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( new THREE.Vector3(point.x,point.y, point.z), 3 ) );
     geometry.setAttribute( 'line_index', new THREE.Uint16BufferAttribute(new THREE.Vector2(l_index), 1));
-    var material = new THREE.PointsMaterial( {color:pointcolors[pointcolors.length-1], size: 20} );
+    var material = new THREE.PointsMaterial( {color:point_color, size: point_size} );
     const p = new THREE.Points( geometry, material );
-    scene.add( p );
-    points.push(p);
-    point_geometry = geometry;
-    point = p;
-
-    v_index += 1;
-
-    if (drag_flag == true) {
-        dragControls = new THREE.DragControls( points, camera, renderer.domElement );
-        dragControls.addEventListener( 'dragstart', dragStartCallback );
-        dragControls.addEventListener( 'dragend', dragendCallback );
-        drag_flag = false;
-    }
+    return p;
 }
 
 function drawline(points, color){
@@ -359,6 +381,15 @@ function drawcurve(vertices){
     }
     var curve = drawline(curve_points, 0xB4B4B3);
     return curve;
+}
+
+function dragCallback(points) {
+    if (drag_flag == true) {
+        dragControls = new THREE.DragControls( points, camera, renderer.domElement );
+        dragControls.addEventListener( 'dragstart', dragStartCallback );
+        dragControls.addEventListener( 'dragend', dragendCallback );
+        drag_flag = false;
+    }
 }
 
 function dragStartCallback(event) {
@@ -405,8 +436,53 @@ function dragendCallback(event) {
         var newcurve = drawcurve(replaceVertices);
         scene.add(newcurve);
         replaceattrib(lineindex, replaceVertices, newLines, newcurve);
+        
+        if (intersection_flag) {
+            drawIntersectionPoints(findIntersection(curves_group[0], curve));
+        }
 
         move_flag = false;
+    }
+}
+
+function float32Array2PointArray(float32Array) {
+    var pointArray = [];
+    for (var i = 0; i < float32Array.length; i+=3) {
+        pointArray.push(new Point(float32Array[i], float32Array[i+1]));
+    }
+    return pointArray;
+}
+function findIntersection(curve1, curve2) {
+    var curve1_vertices = float32Array2PointArray(curve1.geometry.attributes.position.array);
+    var curve2_vertices = float32Array2PointArray(curve2.geometry.attributes.position.array);
+
+    // Move to start and draw a line from there
+    var curve1_path = new Path();
+    curve1_path.strokeColor = 'black';
+    for (var i = 0; i < curve1_vertices.length; i++) {
+        curve1_path.add(curve1_vertices[i]);
+    }
+    
+    var curve2_path = new Path();
+    curve2_path.strokeColor = 'black';
+    curve2_path.strokeColor = 'black';
+    for (var i = 0; i < curve2_vertices.length; i++) {
+        curve2_path.add(curve2_vertices[i]);
+    }
+    
+    var intersections = curve1_path.getIntersections(curve2_path);
+
+    return intersections;
+}   
+
+function drawIntersectionPoints(intersection_points) {
+    for (var i=0; i < intersect_points.length; i++) {
+        scene.remove(intersect_points[i]);
+    }
+    for (var i = 0; i < intersection_points.length; i++) {
+        var intersect_point = drawpoint(intersection_points[i].point, "red", 10);
+        intersect_points.push(intersect_point);
+        scene.add(intersect_point);
     }
 }
 
