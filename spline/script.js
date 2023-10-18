@@ -341,6 +341,9 @@ function doubleclick(e) {
     gui.updateDisplay()
     if (guiControls.num_splines == 2) {
         IntersectionControl.__li.style.pointerEvents = "auto";
+        if (intersection_flag) {
+            drawIntersectionPoints(findIntersection(curves_group[0], curve));
+        }
     }
     reset_flag = true;
 }
